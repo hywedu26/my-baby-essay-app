@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { getFirestore, doc, collection, query, getDocs, addDoc } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// 1. Firebase 설정
+// 1. Firebase 설정 (선생님의 기존 설정값)
 const firebaseConfig = {
   apiKey: "AIzaSyDRqbQMPdeTzwnMe40HgnqhV-Uvo727834",
   authDomain: "my-baby-essay.firebaseapp.com",
@@ -16,8 +16,8 @@ const firebaseConfig = {
   appId: "1:708848692442:web:6fc6572861c705af73c9e3"
 };
 
-// 2. Gemini API 설정 (AI Studio 키를 그대로 두세요!)
-const GEMINI_API_KEY = "AIzaSyDcwQ30mQz-Uoxe2Kt3-65t-F36fC2dKHk"; 
+// 2. Gemini API 설정 (⭐⭐ 방금 '새 프로젝트'에서 받은 키를 여기에 넣으세요! ⭐⭐)
+const GEMINI_API_KEY = "AIzaSyCrJ2zFlaEC2BhX2eadV_ZprdWuZNmgCqc"; 
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const auth = getAuth(app);
@@ -64,9 +64,9 @@ export default function Page() {
     setIsGenerating(true);
     
     try {
-      // ✅ 여기를 수정했습니다! 가장 안정적인 'gemini-pro' 모델 사용
+      // 최신 모델 gemini-1.5-flash 사용
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       
       const prompt = `
         당신은 14개월 아기 '다원'이의 아빠이자 감성적인 에세이 작가입니다.
@@ -98,14 +98,13 @@ export default function Page() {
       
     } catch (error) {
       console.error(error);
-      // 에러 메시지를 좀 더 자세히 보여줍니다.
       alert("AI 생성 실패: " + error.message);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // (화면 렌더링 부분은 동일합니다)
+  // (아래 화면 렌더링 코드는 동일합니다)
   const renderCalendar = () => {
     const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
     const days = [];
