@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { getFirestore, doc, collection, query, getDocs, addDoc } from "firebase/firestore";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // 1. Firebase 설정
@@ -17,13 +16,13 @@ const firebaseConfig = {
   appId: "1:708848692442:web:6fc6572861c705af73c9e3"
 };
 
-// 2. Gemini API 설정 (여기에 키를 넣으세요!)
+// 2. Gemini API 설정 (본인의 키를 꼭 확인하세요!)
 const GEMINI_API_KEY = "AIzaSyDcwQ30mQz-Uoxe2Kt3-65t-F36fC2dKHk"; 
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app);
+// const storage = getStorage(app); // 사진 저장소 기능은 잠시 끕니다.
 
 export default function Page() {
   const [user, setUser] = useState(null);
@@ -36,15 +35,19 @@ export default function Page() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [recordedDates, setRecordedDates] = useState([]);
   const [today] = useState(new Date());
-  const fileInputRef = useRef(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        const q = query(collection(db, "users", currentUser.uid, "essays"));
-        const snapshot = await getDocs(q);
-        setRecordedDates(snapshot.docs.map(doc => doc.data().date));
+        // Firestore 규칙은 꼭 'true'로 설정되어 있어야 합니다!
+        try {
+            const q = query(collection(db, "users", currentUser.uid, "essays"));
+            const snapshot = await getDocs(q);
+            setRecordedDates(snapshot.docs.map(doc => doc.data().date));
+        } catch (e) {
+            console.log("데이터 가져오기 실패(아직 데이터 없음):", e);
+        }
       }
       setLoading(false);
     });
@@ -58,29 +61,21 @@ export default function Page() {
     } catch (err) { alert("오류: " + err.message); }
   };
 
-  // 진짜 AI 에세이 생성 함수
   const handleGenerate = async () => {
     if (!note) return alert("메모를 적어주세요!");
     setIsGenerating(true);
     
     try {
-      // 1. 사진 업로드
-      let imageUrl = '';
-      if (fileInputRef.current?.files[0]) {
-        const file = fileInputRef.current.files[0];
-        const storageRef = ref(storage, `images/${user.uid}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        imageUrl = await getDownloadURL(storageRef);
-      }
-
+      // 1. 사진 업로드는 생략합니다 (결제 문제 우회)
       // 2. Gemini AI에게 글쓰기 요청
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
       const model = genAI.getGenerativeModel({ model: "gemini-pro" });
       
       const prompt = `
-        당신은 아기의 부모이자 감성적인 에세이 작가입니다.
+        당신은 14개월 아기 '다원'이의 아빠이자 감성적인 에세이 작가입니다.
         아래의 메모 내용을 바탕으로 따뜻하고 사랑스러운 육아 에세이를 한 편 써주세요.
-        문체는 '초록바다섬'라는 필명에 어울리게 서정적이고 다정하게 해주세요.
+        문체는 '초록바다 아일랜드'라는 필명에 어울리게 서정적이고 다정하게 해주세요.
+        아이의 행동을 묘사하고, 아빠로서 느끼는 감동을 담아주세요.
         
         메모 내용: ${note}
       `;
@@ -91,19 +86,19 @@ export default function Page() {
 
       setEssayResult(generatedText);
       
-      // 3. 저장
+      // 3. 저장 (사진 URL 없이 내용만 저장)
       const todayStr = new Date().toISOString().split('T')[0];
       await addDoc(collection(db, "users", user.uid, "essays"), {
         date: todayStr,
         content: generatedText,
         originalNote: note,
-        imageUrl: imageUrl,
+        imageUrl: null, // 사진 없음
         createdAt: new Date()
       });
       
       setRecordedDates(prev => [...prev, todayStr]);
       alert("AI 에세이가 완성되었습니다! 💖");
-      setView('archive'); // 작성 후 바로 보관함(Archive)이나 대시보드로 이동
+      setView('archive'); 
       
     } catch (error) {
       console.error(error);
@@ -129,9 +124,6 @@ export default function Page() {
     return days;
   };
 
-  // (화면 렌더링 부분은 이전과 동일하지만, Archive 뷰를 추가해야 합니다.
-  // 코드 길이상 핵심 로직 위주로 드렸으니, 기존 return 문 안의 내용은 그대로 두셔도 됩니다.)
-  
   if (loading) return <div className="min-h-screen bg-[#FFFBF5] flex items-center justify-center">로딩 중...</div>;
 
   if (!user) {
@@ -173,10 +165,13 @@ export default function Page() {
         <div className="p-6">
           <div className="bg-white rounded-[30px] p-6 shadow-sm mb-6">
             <h2 className="font-bold text-[#6D5D4B] mb-4">오늘의 순간 기록하기</h2>
-            <input type="file" ref={fileInputRef} className="mb-4 text-sm w-full file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-[#FFF0ED] file:text-[#FF8E8E]"/>
+            {/* 사진 업로드 버튼 제거 (결제 이슈 해결될 때까지) */}
+            <div className="p-4 bg-[#FFF0ED] rounded-xl mb-4 text-xs text-[#FF8E8E]">
+              📸 사진 기능은 점검 중입니다. 글로만 남겨주세요!
+            </div>
             <textarea 
               className="w-full h-32 p-4 bg-[#FAF9F6] rounded-xl outline-none mb-4 resize-none"
-              placeholder="짧게 메모를 남겨주세요 (예: 다원이가 처음으로 '아빠'라고 했다!)"
+              placeholder="짧게 메모를 남겨주세요 (예: 다원이가 오늘 칫솔을 잡고 치카치카 흉내를 냈다!)"
               value={note}
               onChange={(e)=>setNote(e.target.value)}
             />
@@ -198,6 +193,9 @@ export default function Page() {
                 <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#6D5D4B]">
                     {essayResult ? essayResult : "아직 작성된 글이 없습니다."}
                 </div>
+                <button onClick={()=>setView('dashboard')} className="mt-6 w-full py-3 bg-[#8B7E74] text-white rounded-xl text-sm font-bold">
+                    달력으로 돌아가기
+                </button>
              </div>
         </div>
       )}
