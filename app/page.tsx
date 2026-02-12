@@ -16,7 +16,7 @@ const firebaseConfig = {
   appId: "1:708848692442:web:6fc6572861c705af73c9e3"
 };
 
-// 2. Gemini API 설정 (여기에 선생님의 API 키를 붙여넣으세요!)
+// 2. Gemini API 설정 (AI Studio 키를 그대로 두세요!)
 const GEMINI_API_KEY = "AIzaSyDcwQ30mQz-Uoxe2Kt3-65t-F36fC2dKHk"; 
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
@@ -64,15 +64,14 @@ export default function Page() {
     setIsGenerating(true);
     
     try {
-      // 최신 모델인 gemini-1.5-flash 사용 (속도가 빠르고 무료 티어에 적합)
+      // ✅ 여기를 수정했습니다! 가장 안정적인 'gemini-pro' 모델 사용
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
       
       const prompt = `
         당신은 14개월 아기 '다원'이의 아빠이자 감성적인 에세이 작가입니다.
         아래의 메모 내용을 바탕으로 따뜻하고 사랑스러운 육아 에세이를 한 편 써주세요.
         문체는 '초록바다 아일랜드'라는 필명에 어울리게 서정적이고 다정하게 해주세요.
-        아이의 작은 행동 하나에도 감동하는 아빠의 마음을 담아주세요.
         
         메모 내용: ${note}
       `;
@@ -99,12 +98,14 @@ export default function Page() {
       
     } catch (error) {
       console.error(error);
-      alert("문제가 발생했어요: " + error.message);
+      // 에러 메시지를 좀 더 자세히 보여줍니다.
+      alert("AI 생성 실패: " + error.message);
     } finally {
       setIsGenerating(false);
     }
   };
 
+  // (화면 렌더링 부분은 동일합니다)
   const renderCalendar = () => {
     const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
     const days = [];
@@ -167,7 +168,7 @@ export default function Page() {
             </div>
             <textarea 
               className="w-full h-32 p-4 bg-[#FAF9F6] rounded-xl outline-none mb-4 resize-none"
-              placeholder="짧게 메모를 남겨주세요 (예: 다원이가 오늘 칫솔을 잡고 치카치카 흉내를 냈다!)"
+              placeholder="짧게 메모를 남겨주세요 (예: 다원이가 오늘 판다가 되었다.)"
               value={note}
               onChange={(e)=>setNote(e.target.value)}
             />
