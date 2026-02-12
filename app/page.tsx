@@ -16,13 +16,12 @@ const firebaseConfig = {
   appId: "1:708848692442:web:6fc6572861c705af73c9e3"
 };
 
-// 2. Gemini API 설정 (본인의 키를 꼭 확인하세요!)
+// 2. Gemini API 설정 (여기에 선생님의 API 키를 붙여넣으세요!)
 const GEMINI_API_KEY = "AIzaSyDcwQ30mQz-Uoxe2Kt3-65t-F36fC2dKHk"; 
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const auth = getAuth(app);
 const db = getFirestore(app);
-// const storage = getStorage(app); // 사진 저장소 기능은 잠시 끕니다.
 
 export default function Page() {
   const [user, setUser] = useState(null);
@@ -40,13 +39,12 @@ export default function Page() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Firestore 규칙은 꼭 'true'로 설정되어 있어야 합니다!
         try {
             const q = query(collection(db, "users", currentUser.uid, "essays"));
             const snapshot = await getDocs(q);
             setRecordedDates(snapshot.docs.map(doc => doc.data().date));
         } catch (e) {
-            console.log("데이터 가져오기 실패(아직 데이터 없음):", e);
+            console.log("데이터 없음:", e);
         }
       }
       setLoading(false);
@@ -66,16 +64,15 @@ export default function Page() {
     setIsGenerating(true);
     
     try {
-      // 1. 사진 업로드는 생략합니다 (결제 문제 우회)
-      // 2. Gemini AI에게 글쓰기 요청
+      // 최신 모델인 gemini-1.5-flash 사용 (속도가 빠르고 무료 티어에 적합)
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       
       const prompt = `
         당신은 14개월 아기 '다원'이의 아빠이자 감성적인 에세이 작가입니다.
         아래의 메모 내용을 바탕으로 따뜻하고 사랑스러운 육아 에세이를 한 편 써주세요.
         문체는 '초록바다 아일랜드'라는 필명에 어울리게 서정적이고 다정하게 해주세요.
-        아이의 행동을 묘사하고, 아빠로서 느끼는 감동을 담아주세요.
+        아이의 작은 행동 하나에도 감동하는 아빠의 마음을 담아주세요.
         
         메모 내용: ${note}
       `;
@@ -86,13 +83,13 @@ export default function Page() {
 
       setEssayResult(generatedText);
       
-      // 3. 저장 (사진 URL 없이 내용만 저장)
+      // 저장
       const todayStr = new Date().toISOString().split('T')[0];
       await addDoc(collection(db, "users", user.uid, "essays"), {
         date: todayStr,
         content: generatedText,
         originalNote: note,
-        imageUrl: null, // 사진 없음
+        imageUrl: null,
         createdAt: new Date()
       });
       
@@ -165,7 +162,6 @@ export default function Page() {
         <div className="p-6">
           <div className="bg-white rounded-[30px] p-6 shadow-sm mb-6">
             <h2 className="font-bold text-[#6D5D4B] mb-4">오늘의 순간 기록하기</h2>
-            {/* 사진 업로드 버튼 제거 (결제 이슈 해결될 때까지) */}
             <div className="p-4 bg-[#FFF0ED] rounded-xl mb-4 text-xs text-[#FF8E8E]">
               📸 사진 기능은 점검 중입니다. 글로만 남겨주세요!
             </div>
