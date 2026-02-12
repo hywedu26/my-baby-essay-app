@@ -1,6 +1,6 @@
 // pages/onboarding.tsx (또는 app/onboarding/page.tsx)
 import React, { useState } from 'react';
-import { db, auth } from '@/firebase/config';
+import { db, auth } from './firebaseConfig';
 import { doc, setDoc } from 'firebase/firestore';
 import { useRouter } from 'next/router';
 
