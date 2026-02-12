@@ -1,18 +1,13 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage"; // 이 줄을 추가하세요.
 
-// 여기에 아까 복사한 내용을 붙여넣으세요!
 const firebaseConfig = {
-  apiKey: "AIzaSyDRqbQMPdeTzwnMe40HgnqhV-Uvo727834",
-  authDomain: "my-baby-essay.firebaseapp.com",
-  projectId: "my-baby-essay",
-  storageBucket: "my-baby-essay.firebasestorage.app",
-  messagingSenderId: "708848692442",
-  appId: "1:708848692442:web:6fc6572861c705af73c9e3",
-  measurementId: "G-5CB5PXGNH2"
+  // ... 본인의 설정값들 ...
 };
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app); // 이 줄을 추가하세요!
