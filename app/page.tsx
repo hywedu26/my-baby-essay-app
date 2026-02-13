@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { getFirestore, doc, collection, query, getDocs, addDoc } from "firebase/firestore";
+import { getFirestore, collection, query, getDocs, addDoc, orderBy } from "firebase/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // 1. Firebase 설정 (선생님의 기존 설정값)
@@ -23,6 +23,13 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+type EssayRecord = {
+  id: string;
+  date: string;
+  content: string;
+  originalNote: string;
+};
+
 export default function Page() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -33,6 +40,7 @@ export default function Page() {
   const [essayResult, setEssayResult] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [recordedDates, setRecordedDates] = useState([]);
+  const [essayList, setEssayList] = useState<EssayRecord[]>([]);
   const [today] = useState(new Date());
 
   useEffect(() => {
@@ -40,9 +48,16 @@ export default function Page() {
       setUser(currentUser);
       if (currentUser) {
         try {
-            const q = query(collection(db, "users", currentUser.uid, "essays"));
+            const q = query(collection(db, "users", currentUser.uid, "essays"), orderBy("date", "desc"));
             const snapshot = await getDocs(q);
-            setRecordedDates(snapshot.docs.map(doc => doc.data().date));
+            const essays = snapshot.docs.map((essayDoc) => ({
+              id: essayDoc.id,
+              date: essayDoc.data().date,
+              content: essayDoc.data().content,
+              originalNote: essayDoc.data().originalNote
+            }));
+            setRecordedDates(essays.map((essay) => essay.date));
+            setEssayList(essays);
         } catch (e) {
             console.log("데이터 없음:", e);
         }
@@ -62,27 +77,46 @@ export default function Page() {
   const handleGenerate = async () => {
     if (!note) return alert("메모를 적어주세요!");
     setIsGenerating(true);
-    
+
     try {
-      // 최신 모델 gemini-1.5-flash 사용
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      
       const prompt = `
         당신은 14개월 아기 '다원'이의 아빠이자 감성적인 에세이 작가입니다.
         아래의 메모 내용을 바탕으로 따뜻하고 사랑스러운 육아 에세이를 한 편 써주세요.
         문체는 '초록바다 아일랜드'라는 필명에 어울리게 서정적이고 다정하게 해주세요.
-        
+
         메모 내용: ${note}
       `;
-      
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const generatedText = response.text();
+
+      const candidateModels = [
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-flash",
+        "gemini-1.5-flash-001",
+        "gemini-2.0-flash"
+      ];
+
+      let generatedText = "";
+      let lastError: unknown = null;
+
+      for (const modelName of candidateModels) {
+        try {
+          const model = genAI.getGenerativeModel({ model: modelName });
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          generatedText = response.text();
+          if (generatedText) break;
+        } catch (modelError) {
+          lastError = modelError;
+          console.warn(`모델 시도 실패 (${modelName})`, modelError);
+        }
+      }
+
+      if (!generatedText) {
+        throw lastError ?? new Error("사용 가능한 Gemini 모델을 찾지 못했습니다.");
+      }
 
       setEssayResult(generatedText);
-      
-      // 저장
+
       const todayStr = new Date().toISOString().split('T')[0];
       await addDoc(collection(db, "users", user.uid, "essays"), {
         date: todayStr,
@@ -91,17 +125,27 @@ export default function Page() {
         imageUrl: null,
         createdAt: new Date()
       });
-      
+
       setRecordedDates(prev => [...prev, todayStr]);
+      setEssayList((prev) => [{
+        id: `${todayStr}-${Date.now()}`,
+        date: todayStr,
+        content: generatedText,
+        originalNote: note
+      }, ...prev]);
       alert("AI 에세이가 완성되었습니다! 💖");
-      setView('archive'); 
-      
+      setView('archive');
     } catch (error) {
       console.error(error);
-      alert("AI 생성 실패: " + error.message);
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      alert("AI 생성 실패: " + message + "\n(모델 또는 API 키 설정을 확인해주세요.)");
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleDownloadPdf = () => {
+    window.print();
   };
 
   // (아래 화면 렌더링 코드는 동일합니다)
@@ -185,9 +229,27 @@ export default function Page() {
       {view === 'archive' && (
         <div className="p-6">
              <div className="bg-white rounded-[30px] p-6 shadow-sm mb-6">
-                <h2 className="font-bold text-[#6D5D4B] mb-4">최근 기록</h2>
-                <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#6D5D4B]">
-                    {essayResult ? essayResult : "아직 작성된 글이 없습니다."}
+                <div className="flex items-center justify-between mb-4 gap-2">
+                  <h2 className="font-bold text-[#6D5D4B]">기록 보관소</h2>
+                  <button
+                    onClick={handleDownloadPdf}
+                    className="px-3 py-2 bg-[#FFB0B0] text-white text-xs rounded-full font-bold"
+                  >
+                    PDF로 저장
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  {essayList.length > 0 ? essayList.map((essay) => (
+                    <article key={essay.id} className="rounded-2xl border border-[#F2EAD3] p-4 bg-[#FFFBF5]">
+                      <p className="text-xs text-[#A79277] mb-2">{essay.date}</p>
+                      <p className="text-sm text-[#8B7E74] mb-2">메모: {essay.originalNote}</p>
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#6D5D4B]">{essay.content}</p>
+                    </article>
+                  )) : (
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#6D5D4B]">
+                      {essayResult ? essayResult : "아직 작성된 글이 없습니다."}
+                    </div>
+                  )}
                 </div>
                 <button onClick={()=>setView('dashboard')} className="mt-6 w-full py-3 bg-[#8B7E74] text-white rounded-xl text-sm font-bold">
                     달력으로 돌아가기
